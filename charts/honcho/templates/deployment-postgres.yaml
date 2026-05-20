@@ -1,0 +1,74 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "honcho.fullname" . }}-postgres
+  labels:
+    {{- include "honcho.labels" . | nindent 4 }}
+    component: postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "honcho.selectorLabels" . | nindent 6 }}
+      component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "honcho.selectorLabels" . | nindent 8 }}
+        component: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: postgres
+          containerPort: {{ .Values.postgres.service.port }}
+          protocol: TCP
+        env:
+        - name: POSTGRES_USER
+          value: {{ .Values.postgres.env.POSTGRES_USER | quote }}
+        - name: POSTGRES_DB
+          value: {{ .Values.postgres.env.POSTGRES_DB | quote }}
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "honcho.fullname" . }}-secrets
+              key: db-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        args: ["-c", "max_connections=200"]
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - pg_isready -U {{ .Values.postgres.env.POSTGRES_USER }} -d {{ .Values.postgres.env.POSTGRES_DB }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - pg_isready -U {{ .Values.postgres.env.POSTGRES_USER }} -d {{ .Values.postgres.env.POSTGRES_DB }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: {{ include "honcho.fullname" . }}-postgres
+{{- end }}

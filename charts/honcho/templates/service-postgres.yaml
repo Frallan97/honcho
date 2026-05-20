@@ -1,0 +1,19 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "honcho.fullname" . }}-postgres
+  labels:
+    {{- include "honcho.labels" . | nindent 4 }}
+    component: postgres
+spec:
+  type: {{ .Values.postgres.service.type }}
+  ports:
+    - port: {{ .Values.postgres.service.port }}
+      targetPort: postgres
+      protocol: TCP
+      name: postgres
+  selector:
+    {{- include "honcho.selectorLabels" . | nindent 4 }}
+    component: postgres
+{{- end }}

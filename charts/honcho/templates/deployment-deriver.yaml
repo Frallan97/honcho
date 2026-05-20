@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "honcho.fullname" . }}-deriver
+  labels:
+    {{- include "honcho.labels" . | nindent 4 }}
+    component: deriver
+spec:
+  replicas: {{ .Values.deriver.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "honcho.selectorLabels" . | nindent 6 }}
+      component: deriver
+  template:
+    metadata:
+      labels:
+        {{- include "honcho.selectorLabels" . | nindent 8 }}
+        component: deriver
+    spec:
+      initContainers:
+      - name: wait-for-api
+        image: busybox:1.36
+        command: ['sh', '-c', 'until nc -z {{ include "honcho.fullname" . }}-api 8000; do sleep 2; done']
+      containers:
+      - name: deriver
+        image: "{{ .Values.deriver.image.repository }}:{{ .Values.deriver.image.tag }}"
+        imagePullPolicy: {{ .Values.deriver.image.pullPolicy }}
+        command: ["/app/.venv/bin/python", "-m", "src.deriver"]
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "honcho.fullname" . }}-secrets
+              key: db-password
+        - name: DB_CONNECTION_URI
+          value: "postgresql+psycopg://{{ .Values.postgres.env.POSTGRES_USER }}:$(DB_PASSWORD)@{{ include "honcho.fullname" . }}-postgres:{{ .Values.postgres.service.port }}/{{ .Values.postgres.env.POSTGRES_DB }}"
+        - name: CACHE_URL
+          value: "redis://{{ include "honcho.fullname" . }}-redis:{{ .Values.redis.service.port }}/0?suppress=true"
+        - name: CACHE_ENABLED
+          value: "true"
+        - name: AUTH_USE_AUTH
+          value: "false"
+        - name: LLM_GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "honcho.fullname" . }}-secrets
+              key: gemini-api-key
+        resources:
+          {{- toYaml .Values.deriver.resources | nindent 10 }}
